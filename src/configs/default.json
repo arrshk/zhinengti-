@@ -1,0 +1,35 @@
+{
+  "data": {
+    "n_samples": 4000,
+    "n_features": 6,
+    "drift_start_ratio": 0.6,
+    "drift_strength": 1.0,
+    "label_noise": 0.05,
+    "seed": 7
+  },
+  "budget": {
+    "compute_minutes": 60.0,
+    "annotation_items": 500,
+    "minutes_per_train": 2.5,
+    "items_per_label_query": 50
+  },
+  "gate": {
+    "min_auc_gain": 0.005,
+    "max_regression": 0.02,
+    "max_rounds": 3,
+    "max_candidates_per_round": 3
+  },
+  "drift": {
+    "psi_threshold": 0.1,
+    "psi_alert": 0.25,
+    "window": 800,
+    "reference": 1200
+  },
+  "search_space": {
+    "lr": [0.05, 0.15, 0.3],
+    "l2": [0.0001, 0.001, 0.01],
+    "epochs": [80, 160],
+    "recent_weight": [1.0, 3.0, 8.0]
+  },
+  "output_dir": "runs/default"
+}

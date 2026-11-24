@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>智训引擎 · 轴承 RUL · 实验记录</title>
+<style>
+  :root { --navy:#1f3864; --orange:#c55a11; --grey:#595959; --line:#e5e7eb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; color:#1a1a1a; background:#fafafa; }
+  header { background:var(--navy); color:#fff; padding:48px 24px; }
+  header h1 { margin:0 0 8px; font-size:30px; }
+  header p { margin:0; color:#c9d6ea; }
+  main { max-width:960px; margin:0 auto; padding:32px 24px 64px; }
+  h2 { margin:40px 0 12px; font-size:21px; color:var(--navy); border-left:4px solid var(--orange); padding-left:10px; }
+  table { border-collapse:collapse; width:100%; margin:12px 0; background:#fff; }
+  th,td { border:1px solid var(--line); padding:8px 10px; text-align:left; font-size:14px; }
+  th { background:var(--navy); color:#fff; }
+  tr:nth-child(even) td { background:#f6f8fc; }
+  pre { background:#0f172a; color:#e2e8f0; padding:14px 16px; border-radius:8px; overflow:auto; font-size:13px; line-height:1.6; }
+  .kpi { display:flex; gap:16px; flex-wrap:wrap; margin:20px 0; }
+  .kpi div { flex:1 1 200px; background:#fff; border:1px solid var(--line); border-radius:10px; padding:16px; }
+  .kpi b { display:block; font-size:26px; color:var(--navy); }
+  .kpi span { color:var(--grey); font-size:13px; }
+  footer { color:var(--grey); font-size:13px; border-top:1px solid var(--line); padding-top:16px; margin-top:40px; }
+  code { background:#eef2f7; padding:2px 5px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>智训引擎 · 滚动轴承剩余寿命预测</h1>
+  <p>第二届北京市大学生“人工智能+”创新大赛 · 赛题9 · 任务 B（regression / RMSE 分钟）</p>
+</header>
+<main>
+  <div class="kpi">
+    <div><b>681.2 → 647.2</b><span>验证集 RMSE（分钟），−5.0%</span></div>
+    <div><b>2.02 → 1.20</b><span>训练师 SFT loss（2 epoch）</span></div>
+    <div><b>2 / 0</b><span>闭环中 Qwen 调用 / 回退次数</span></div>
+  </div>
+
+  <h2>一、候选对比与门禁</h2>
+  <table>
+    <tr><th>候选</th><th>续训轮数</th><th>验证 RMSE</th><th>验证 MAE</th><th>结论</th></tr>
+    <tr><td>官方 baseline</td><td>—</td><td>681.2</td><td>563.1</td><td>起点</td></tr>
+    <tr><td>C1</td><td>2</td><td>656.4</td><td>545.9</td><td>改善不足</td></tr>
+    <tr><td><b>C2</b></td><td><b>4</b></td><td><b>647.2</b></td><td><b>544.1</b></td><td><b>上线（−5.0%）</b></td></tr>
+    <tr><td>C3</td><td>8</td><td>678.6</td><td>578.4</td><td>过拟合，门禁拒绝</td></tr>
+  </table>
+  <p>训练轮数与收益<b>不单调</b>：4 轮最优，8 轮 MAE 反而变差 2.7%。门禁要求“RMSE 增益 ≥1% 且 MAE 不劣化 &gt;2%”，否则回退父产物。</p>
+
+  <h2>二、闭环实跑（Qwen 训练师）</h2>
+  <pre>[round 1] 漂移等级=SEVERE maxPSI=0.479 top=['原料含水率', '车间湿度']
+[round 1] 上线 EXP-0004（recent AUC +0.0499，通过双切片门禁）
+[round 2] 回滚：0.7408 未超过 0.7407+0.0050，收益不足；继续使用 EXP-0004
+
+planner: {'kind': 'qwen', 'calls': 2, 'fallbacks': 0, 'latency_ms': [1158, 831]}</pre>
+
+  <h2>三、训练师微调（PyTRIO · Qwen3.5-4B）</h2>
+  <pre>数据 120 条，基座 Qwen/Qwen3.5-4B，LoRA rank 32
+epoch 1/2  loss/token = 2.0202
+epoch 2/2  loss/token = 1.2018
+weights: trio://run_svga22o50zm8/sampler_weights/zhixun-trainer-v1</pre>
+
+  <h2>四、B 任务自检（官方数据）</h2>
+  <pre>官方 baseline: RMSE=681.2  MAE=563.1
+[cand 1] epochs=4  RMSE=647.2  MAE=544.1   ← 选中
+[cand 0] epochs=2  RMSE=656.4  MAE=545.9
+[cand 2] epochs=8  RMSE=678.6  MAE=578.4
+reason: 验证 RMSE 降低 5.0%（681.2→647.2 分钟），MAE 未变差，通过门禁。
+predict: {'value': 509.94}</pre>
+
+  <h2>五、复现</h2>
+  <p>仓库内含官方训练包代码与检查点，运行：</p>
+  <pre>python -m baselines.train --profile B \
+  --train public/train.jsonl --validation public/validation.jsonl \
+  --from-baseline checkpoint.npz --epochs 4 --output round-1
+
+python src/harness/selfcheck_b.py training_pkg</pre>
+
+  <footer>
+    数据来源：官方训练包 cpu-b-rul-20261110-v1 的公开训练/验证集；所有数字为本机真实运行结果。
+  </footer>
+</main>
+</body>
+</html>

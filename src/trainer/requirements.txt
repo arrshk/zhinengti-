@@ -1,0 +1,7 @@
+# 训练师（Qwen + PyTRIO）所需依赖；闭环本身只需要 numpy
+pytrio>=0.2.9
+transformers>=4.40
+modelscope>=1.9
+numpy>=2.0
+# 可选：实验记录（赛题要求的观测平台）
+swanlab>=0.5
